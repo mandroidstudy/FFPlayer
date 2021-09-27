@@ -19,9 +19,7 @@ public:
     SafeQueue<AVFrame*> frames;
 
 public:
-    BaseChannel(int index, AVCodecContext *codecContext){
-        this->stream_index = index;
-        this->avCodecContext = codecContext;
+    BaseChannel(int index, AVCodecContext *codecContext):stream_index(index),avCodecContext(codecContext){
         packets.setReleaseCallback(ReleaseAVPacket);
         frames.setReleaseCallback(ReleaseAVFrame);
     }
