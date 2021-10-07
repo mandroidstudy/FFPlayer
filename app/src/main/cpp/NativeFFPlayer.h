@@ -22,10 +22,10 @@ private:
     std::string data_source;
     bool isPlaying;
 
-    JNICallback  *jni_callback = nullptr;
-    VideoChannel *video_channel = nullptr;
-    AudioChannel *audio_channel = nullptr;
-    AVFormatContext * avFormatContext = nullptr;
+    JNICallback *jni_callback         = nullptr;
+    VideoChannel *video_channel       = nullptr;
+    AudioChannel *audio_channel       = nullptr;
+    AVFormatContext *avFormatContext  = nullptr;
 
 public:
 
@@ -36,11 +36,11 @@ public:
     void stop();
     void release();
 
-    void _prepare();
-
+    void doPrepare();
+    void doStart();
     ~NativeFFPlayer();
 
-    void _start();
+    void setRenderCallback(RenderCallback renderCallback);
 };
 
 

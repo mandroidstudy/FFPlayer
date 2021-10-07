@@ -27,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
         ffPlayer = new FFPlayer();
         ffPlayer.setDataSource("");
-
+        ffPlayer.setSurfaceHolder(binding.surfaceView.getHolder());
         binding.btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

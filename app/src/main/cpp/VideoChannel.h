@@ -12,17 +12,27 @@ extern "C"{
 #include "libavutil/imgutils.h"
 }
 
+typedef void (*RenderCallback)(uint8_t *, int, int, int);
+
 class VideoChannel : public BaseChannel{
 
 public:
+
+    RenderCallback _renderCallback = nullptr;
+
     bool isPlaying = false;
+
     VideoChannel(int index, AVCodecContext *pContext);
-    ~VideoChannel();
+
     void start();
 
     void doDecodePacket();
 
     void doPlay();
+
+    void setRenderCallback(RenderCallback renderCallback);
+
+    ~VideoChannel();
 };
 
 

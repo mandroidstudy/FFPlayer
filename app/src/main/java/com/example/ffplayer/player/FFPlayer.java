@@ -1,5 +1,10 @@
 package com.example.ffplayer.player;
 
+import android.view.Surface;
+import android.view.SurfaceHolder;
+
+import androidx.annotation.NonNull;
+
 import com.example.ffplayer.listener.ListenerInfo;
 import com.example.ffplayer.listener.OnErrorListener;
 import com.example.ffplayer.listener.OnPreparedListener;
@@ -9,7 +14,7 @@ import com.example.ffplayer.listener.OnPreparedListener;
  * @time 2021/9/24
  * @describe
  */
-public class FFPlayer {
+public class FFPlayer implements SurfaceHolder.Callback {
 
     public static final int ERR_OPEN_INPUT = 1;
     public static final int ERR_FIND_STREAM_INFO = 2;
@@ -24,6 +29,8 @@ public class FFPlayer {
     }
 
     private ListenerInfo mListenerInfo;
+
+    private SurfaceHolder mSurfaceHolder;
 
     public FFPlayer(){
         nativeHandle = nativeCreate();
@@ -47,6 +54,29 @@ public class FFPlayer {
 
     public void release(){
         nativeRelease();
+    }
+
+    public void setSurfaceHolder(SurfaceHolder holder) {
+        if (mSurfaceHolder != null){
+            mSurfaceHolder.removeCallback(this);
+        }
+        mSurfaceHolder = holder;
+        mSurfaceHolder.addCallback(this);
+    }
+
+    @Override
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {
+
+    }
+
+    @Override
+    public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+        setNativeSurface(holder.getSurface());
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+
     }
 
     ListenerInfo getListenerInfo() {
@@ -92,4 +122,6 @@ public class FFPlayer {
     private native void nativeSetDataSource(String source);
 
     private native void nativeRelease();
+
+    private native void setNativeSurface(Surface surface);
 }

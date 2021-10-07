@@ -6,7 +6,7 @@
 
 VideoChannel::VideoChannel(int index, AVCodecContext *pContext):BaseChannel(index,pContext) {}
 
-void * decodeTask(void * arg){
+void * decodeVideoTask(void * arg){
     auto *videoChannel = static_cast<VideoChannel *>(arg);
     if (videoChannel){
         videoChannel->doDecodePacket();
@@ -14,7 +14,7 @@ void * decodeTask(void * arg){
     return 0;
 }
 
-void * playTask(void * arg){
+void * playVideoTask(void * arg){
     auto *videoChannel = static_cast<VideoChannel *>(arg);
     if (videoChannel){
         videoChannel->doPlay();
@@ -27,9 +27,9 @@ void VideoChannel::start() {
     packets.setWorkStatus(true);
     frames.setWorkStatus(true);
     pthread_t decode_tid;
-    pthread_create(&decode_tid, nullptr,decodeTask, this);
+    pthread_create(&decode_tid, nullptr, decodeVideoTask, this);
     pthread_t play_tid;
-    pthread_create(&play_tid, nullptr,playTask, this);
+    pthread_create(&play_tid, nullptr, playVideoTask, this);
 }
 
 VideoChannel::~VideoChannel() {
@@ -63,6 +63,9 @@ void VideoChannel::doDecodePacket() {
             break;
         }
     }
+    isPlaying = false;
+    packets.setWorkStatus(false);
+    frames.setWorkStatus(false);
 }
 
 void VideoChannel::doPlay() {
@@ -93,7 +96,18 @@ void VideoChannel::doPlay() {
         }
         sws_scale(swsContext, frame->data, frame->linesize, 0, avCodecContext->height,
                   dst_data,dst_linesizes);
-
-        //success get dst_data, render it to window
+        //success get dst_data, render it to windowav_image_fill_arrays
+        if (_renderCallback){
+            _renderCallback(dst_data[0],avCodecContext->width,avCodecContext->height,dst_linesizes[0]);
+        }
     }
+    isPlaying = false;
+    packets.setWorkStatus(false);
+    frames.setWorkStatus(false);
+    av_free(&dst_data[0]);
+    sws_freeContext(swsContext);
+}
+
+void VideoChannel::setRenderCallback(RenderCallback renderCallback) {
+    this->_renderCallback = renderCallback;
 }

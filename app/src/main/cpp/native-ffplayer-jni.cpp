@@ -2,13 +2,17 @@
 #include <string>
 #include "NativeFFPlayer.h"
 #include "JNICallback.h"
-
+#include <android/native_window_jni.h>
+#include <pthread.h>
 using namespace std;
 
 JavaVM *javaVm = nullptr;
 
 static jclass g_cls = nullptr;
 static jfieldID g_fileID = nullptr;
+
+ANativeWindow* nativeWindow = nullptr;
+pthread_mutex_t windowMutex = PTHREAD_MUTEX_INITIALIZER;
 
 static string jstring2string(JNIEnv *env, jstring str) {
     if (str) {
@@ -77,12 +81,54 @@ Java_com_example_ffplayer_player_FFPlayer_nativeSetDataSource(JNIEnv *env, jobje
     }
 }
 
+void renderCallback(uint8_t * src_data, int width, int height, int src_linesize){
+    pthread_mutex_lock(&windowMutex);
+    //render raw data to window
+    if (!nativeWindow){
+        pthread_mutex_unlock(&windowMutex);
+        return;
+    }
+    ANativeWindow_setBuffersGeometry(nativeWindow,width,height,WINDOW_FORMAT_RGBA_8888);
+    ANativeWindow_Buffer  windowBuffer;
+    if (ANativeWindow_lock(nativeWindow,&windowBuffer,0)){
+        ANativeWindow_release(nativeWindow);
+        nativeWindow = nullptr;
+        pthread_mutex_unlock(&windowMutex);
+        return;
+    }
+    uint8_t * dst_data = static_cast<uint8_t *>(windowBuffer.bits);
+    int32_t dst_linesize = windowBuffer.stride * 4;
+    for (int i = 0; i < windowBuffer.height; ++i) {
+        //windowBuffer 64字节对齐 但是为啥1928不行？
+//        memcpy(dst_data + i * 1792,data + i * 1704,1792);
+        memcpy(dst_data + i * dst_linesize,src_data + i * src_linesize,dst_linesize);
+    }
+    ANativeWindow_unlockAndPost(nativeWindow);
+    pthread_mutex_unlock(&windowMutex);
+}
+
 extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_example_ffplayer_player_FFPlayer_nativeCreate(JNIEnv *env, jobject thiz) {
     auto * jniCallback = new JNICallback(javaVm,env,thiz);
     auto * nativeFfPlayer = new NativeFFPlayer(jniCallback);
+    nativeFfPlayer->setRenderCallback(renderCallback);
     return reinterpret_cast<jlong>(nativeFfPlayer);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_setNativeSurface(JNIEnv *env, jobject thiz,jobject surface) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        pthread_mutex_lock(&windowMutex);
+        if (nativeWindow){
+            ANativeWindow_release(nativeWindow);
+            nativeWindow = nullptr;
+        }
+        nativeWindow = ANativeWindow_fromSurface(env,surface);
+        pthread_mutex_unlock(&windowMutex);
+    }
 }
 
 extern "C"
