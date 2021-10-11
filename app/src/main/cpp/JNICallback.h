@@ -15,10 +15,12 @@ private:
     jobject jobj;
 
     jmethodID onPreparedMid;
+    jmethodID onCompletedMid;
     jmethodID onErrorMid;
 public:
     JNICallback(JavaVM *javaVm, JNIEnv *env, jobject jobj);
     void onPrepared(ThreadType threadType);
+    void onCompleted(ThreadType threadType);
     void onError(ThreadType threadType,jint code,const char * desc);
     ~JNICallback();
 };

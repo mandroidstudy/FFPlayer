@@ -10,7 +10,9 @@ NativeFFPlayer::NativeFFPlayer(JNICallback *jniCallback) {
 
 void* prepareTask(void * arg){
     auto * player = static_cast<NativeFFPlayer *>(arg);
-    player->doPrepare();
+    if (player){
+        player->doPrepare();
+    }
     return 0;
 }
 
@@ -47,20 +49,21 @@ void NativeFFPlayer::doPrepare() {
         AVCodecContext * avCodecContext = avcodec_alloc_context3(avCodec);
         res = avcodec_parameters_to_context(avCodecContext,codecParameters);
         if (res < 0){
-            if (jni_callback != nullptr){
+            if (jni_callback){
                 jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_PARAMS_TO_CONTEXT,av_err2str(res));
             }
             return;
         }
         res = avcodec_open2(avCodecContext,avCodec,0);
         if (res){
-            if (jni_callback != nullptr){
+            if (jni_callback){
                 jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,av_err2str(res));
             }
             return;
         }
         if (codecParameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO){
             video_channel = new VideoChannel(i, avCodecContext);
+            video_channel->setRenderCallback(renderCallback);
         } else if (codecParameters->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO){
             audio_channel = new AudioChannel(i,avCodecContext);
         }
@@ -89,39 +92,68 @@ void NativeFFPlayer::setDataSource(std::string& source) {
 
 void* startTask(void * arg){
     auto * player = static_cast<NativeFFPlayer *>(arg);
-    player->doStart();
+    if (player){
+        player->doStart();
+    }
     return 0;
 }
 
 void NativeFFPlayer::doStart() {
     while (isPlaying){
+        if (video_channel && video_channel->packets.size() > 100) {
+            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
+            continue;
+        }
+
+        if (audio_channel && audio_channel->packets.size() > 100) {
+            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
+            continue;
+        }
+
         AVPacket *pkt = av_packet_alloc();
         int res = av_read_frame(avFormatContext,pkt);
-        if (res){
-            if (pkt->stream_index == audio_channel->stream_index){
+        if (res == 0){
+            if (audio_channel && pkt->stream_index == audio_channel->stream_index){
                 audio_channel->packets.push(pkt);
-            } else if (pkt->stream_index == video_channel->stream_index){
+            } else if (video_channel && pkt->stream_index == video_channel->stream_index){
                 video_channel->packets.push(pkt);
             }
         } else if(res == AVERROR_EOF){
             //read packets end
+            if (audio_channel->packets.empty()
+                && audio_channel->frames.empty()
+                   && video_channel->packets.empty()
+                      && video_channel->frames.empty()){
+                if (jni_callback){
+                    jni_callback->onCompleted(ThreadType::THREAD_TYPE_CHILD);
+                }
+                break;
+            }
         } else{
             //error
             break;
         }
     } // end whild
     isPlaying = false;
+    //stop
+    if (audio_channel){
+        video_channel->stop();
+    }
+    if (video_channel){
+        video_channel->stop();
+    }
 }
 
 void NativeFFPlayer::start() {
-    if (audio_channel != nullptr){
+    isPlaying = true;
+    if (audio_channel){
         audio_channel->start();
     }
-    if (video_channel != nullptr){
+    if (video_channel){
         video_channel->start();
     }
     pthread_t start_tid;
-    pthread_create(&start_tid,0,startTask,0);
+    pthread_create(&start_tid,0,startTask,this);
 }
 
 void NativeFFPlayer::stop() {
@@ -144,6 +176,6 @@ NativeFFPlayer::~NativeFFPlayer() {
 }
 
 void NativeFFPlayer::setRenderCallback(RenderCallback renderCallback) {
-    video_channel->setRenderCallback(renderCallback);
+    this->renderCallback = renderCallback;
 }
 

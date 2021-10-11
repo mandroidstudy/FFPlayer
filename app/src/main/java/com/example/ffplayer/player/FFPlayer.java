@@ -6,6 +6,7 @@ import android.view.SurfaceHolder;
 import androidx.annotation.NonNull;
 
 import com.example.ffplayer.listener.ListenerInfo;
+import com.example.ffplayer.listener.OnCompletedListener;
 import com.example.ffplayer.listener.OnErrorListener;
 import com.example.ffplayer.listener.OnPreparedListener;
 
@@ -91,6 +92,10 @@ public class FFPlayer implements SurfaceHolder.Callback {
         getListenerInfo().mOnPreparedListener = onPreparedListener;
     }
 
+    public void setOnCompletedListener(OnCompletedListener onCompletedListener) {
+        getListenerInfo().mOnCompletedListener = onCompletedListener;
+    }
+
     public void setOnErrorListener(OnErrorListener onErrorListener) {
         getListenerInfo().mOnErrorListener = onErrorListener;
     }
@@ -100,6 +105,12 @@ public class FFPlayer implements SurfaceHolder.Callback {
     private void onPrepared(){
         if (getListenerInfo().mOnPreparedListener != null){
             getListenerInfo().mOnPreparedListener.onPrepared();
+        }
+    }
+
+    private void onCompleted(){
+        if (getListenerInfo().mOnCompletedListener != null){
+            getListenerInfo().mOnCompletedListener.onCompleted();
         }
     }
 

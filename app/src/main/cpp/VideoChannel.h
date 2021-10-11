@@ -12,13 +12,13 @@ extern "C"{
 #include "libavutil/imgutils.h"
 }
 
-typedef void (*RenderCallback)(uint8_t *, int, int, int);
+typedef void(*RenderCallback) (uint8_t *, int, int, int);
 
 class VideoChannel : public BaseChannel{
 
 public:
 
-    RenderCallback _renderCallback = nullptr;
+    RenderCallback _renderCallback = 0;
 
     bool isPlaying = false;
 
@@ -33,6 +33,8 @@ public:
     void setRenderCallback(RenderCallback renderCallback);
 
     ~VideoChannel();
+
+    void stop();
 };
 
 

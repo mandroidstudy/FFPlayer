@@ -8,4 +8,5 @@ package com.example.ffplayer.listener;
 public class ListenerInfo {
     public OnPreparedListener mOnPreparedListener;
     public OnErrorListener mOnErrorListener;
+    public OnCompletedListener mOnCompletedListener;
 }

@@ -49,6 +49,7 @@ public:
         if (isWorking && !values.empty()){
             t = values.front();
             values.pop();
+            pthread_mutex_unlock(&mutex);
             return 1;
         }
         pthread_mutex_unlock(&mutex);

@@ -37,18 +37,18 @@ VideoChannel::~VideoChannel() {
 }
 
 void VideoChannel::doDecodePacket() {
+    AVPacket * packet = nullptr;
     while (isPlaying){
-        AVPacket * packet = nullptr;
         int res = packets.frontAndPop(packet);
         if (!isPlaying){
-            ReleaseAVPacket(&packet);
             break;
         }
         if (res == 0){
             continue;
         }
         res= avcodec_send_packet(avCodecContext,packet);
-        ReleaseAVPacket(&packet);
+        av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
+        ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
         if (res == 0){
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
@@ -64,6 +64,8 @@ void VideoChannel::doDecodePacket() {
         }
     }
     isPlaying = false;
+    av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
+    ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
     packets.setWorkStatus(false);
     frames.setWorkStatus(false);
 }
@@ -88,6 +90,7 @@ void VideoChannel::doPlay() {
         AVFrame *frame = nullptr;
         int res = frames.frontAndPop(frame);
         if (!isPlaying) {
+            av_frame_unref(frame);
             ReleaseAVFrame(&frame);
             break;
         }
@@ -100,6 +103,8 @@ void VideoChannel::doPlay() {
         if (_renderCallback){
             _renderCallback(dst_data[0],avCodecContext->width,avCodecContext->height,dst_linesizes[0]);
         }
+        av_frame_unref(frame);
+        ReleaseAVFrame(&frame);
     }
     isPlaying = false;
     packets.setWorkStatus(false);
@@ -110,4 +115,7 @@ void VideoChannel::doPlay() {
 
 void VideoChannel::setRenderCallback(RenderCallback renderCallback) {
     this->_renderCallback = renderCallback;
+}
+
+void VideoChannel::stop() {
 }

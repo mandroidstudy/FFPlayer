@@ -6,6 +6,10 @@ android {
     compileSdk 30
     buildToolsVersion "30.0.3"
 
+    dataBinding {
+        enabled = true
+    }
+
     defaultConfig {
         applicationId "com.example.ffplayer"
         minSdk 21

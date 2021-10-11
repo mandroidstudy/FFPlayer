@@ -5,9 +5,10 @@
 #ifndef FFPLAYER_BASECHANNEL_H
 #define FFPLAYER_BASECHANNEL_H
 #include "SafeQueue.h"
-
+#include "LogM.h"
 extern "C"{
 #include "libavformat/avformat.h"
+#include <libavutil/time.h>
 }
 
 class BaseChannel{

@@ -54,18 +54,22 @@ void AudioChannel::start() {
 }
 
 void AudioChannel::doDecodePacket() {
+    AVPacket * packet = nullptr;
     while (isPlaying){
-        AVPacket * packet = nullptr;
+        if (isPlaying && frames.size() > 100) {
+            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
+            continue;
+        }
         int res = packets.frontAndPop(packet);
         if (!isPlaying){
-            ReleaseAVPacket(&packet);
             break;
         }
         if (res == 0){
             continue;
         }
         res= avcodec_send_packet(avCodecContext,packet);
-        ReleaseAVPacket(&packet);
+        av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
+        ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
         if (res == 0){
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
@@ -80,6 +84,9 @@ void AudioChannel::doDecodePacket() {
             break;
         }
     }
+
+    av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
+    ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
     isPlaying = false;
     packets.setWorkStatus(false);
     frames.setWorkStatus(false);
@@ -89,9 +96,7 @@ void AudioChannel::doDecodePacket() {
 void bufferQueueCallback(SLAndroidSimpleBufferQueueItf caller, void *pContext){
     AudioChannel* audioChannel = static_cast<AudioChannel *>(pContext);
     int pcm_size = audioChannel->reSampleAndObtainPCM();
-    if (pcm_size <= 0){
-        return;
-    }
+    if (pcm_size <= 0) return;
     (*caller)->Enqueue(caller,
                        audioChannel->out_buffer,//pcm data
                        pcm_size);//pcm data size
@@ -102,17 +107,17 @@ void AudioChannel::doPlay() {
     //1、获取引擎接口
     sLresult = slCreateEngine(&engineObject,0, 0, 0, 0, 0);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("slCreateEngine fail")
         return;
     }
     sLresult = (*engineObject)->Realize(engineObject, SL_BOOLEAN_FALSE);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("engineObject Realize fail")
         return;
     }
     sLresult = (*engineObject)->GetInterface(engineObject, SL_IID_ENGINE, &engineEngine);
     if (sLresult != SL_RESULT_SUCCESS || !engineEngine){
-        //fail
+        LOGE("engineObject GetInterface fail")
         return;
     }
 
@@ -121,25 +126,20 @@ void AudioChannel::doPlay() {
     const SLboolean req[1] = {SL_BOOLEAN_FALSE};
     sLresult = (*engineEngine)->CreateOutputMix(engineEngine, &outputMixObject, 1, ids, req);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("CreateOutputMix fail")
         return;
     }
     sLresult = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("outputMixObject Realize fail")
         return;
     }
     sLresult=(*outputMixObject)->GetInterface(outputMixObject, SL_IID_ENVIRONMENTALREVERB,
                                               &outputMixEnvironmentalReverb);
-    if (sLresult != SL_RESULT_SUCCESS || !outputMixEnvironmentalReverb){
-        //fail
-        return;
-    }
-    sLresult = (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
-            outputMixEnvironmentalReverb, &reverbSettings);
-    if (sLresult != SL_RESULT_SUCCESS){
-        //fail
-        return;
+
+    if (outputMixEnvironmentalReverb && sLresult == SL_RESULT_SUCCESS){
+         (*outputMixEnvironmentalReverb)->SetEnvironmentalReverbProperties(
+                outputMixEnvironmentalReverb, &reverbSettings);
     }
 
     //3、创建播放器
@@ -172,35 +172,39 @@ void AudioChannel::doPlay() {
                                        3,iids,ireq);
 
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("CreateAudioPlayer fail")
         return;
     }
     sLresult = (*playerObject)->Realize(playerObject,SL_BOOLEAN_FALSE);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("playerObject Realize fail")
         return;
     }
 
     //获取播放接口
     sLresult = (*playerObject)->GetInterface(playerObject,SL_IID_PLAY,&player);
     if (sLresult != SL_RESULT_SUCCESS || !player){
-        //fail
+        LOGE("playerObject GetInterface player fail")
         return;
     }
 
     //4、获取缓冲队列接口、给缓冲队列注册回调函数
     sLresult = (*playerObject)->GetInterface(playerObject,SL_IID_BUFFERQUEUE,&bufferQueueItf);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("playerObject GetInterface bufferQueueItf fail")
         return;
     }
     sLresult = (*bufferQueueItf)->RegisterCallback(bufferQueueItf, bufferQueueCallback, this);
     if (sLresult != SL_RESULT_SUCCESS){
-        //fail
+        LOGE("bufferQueueItf RegisterCallback fail")
         return;
     }
     //5、设置播放状态、主动调用一次回调使缓存队列接口工作
-    (*player)->SetPlayState(player,SL_PLAYSTATE_PLAYING);
+    sLresult = (*player)->SetPlayState(player,SL_PLAYSTATE_PLAYING);
+    if (sLresult != SL_RESULT_SUCCESS){
+        LOGE("player SetPlayState fail")
+        return;
+    }
     bufferQueueCallback(bufferQueueItf, this);
 }
 
@@ -217,6 +221,7 @@ int AudioChannel::reSampleAndObtainPCM() {
         AVFrame *frame = nullptr;
         int res = frames.frontAndPop(frame);
         if (!isPlaying) {
+            av_frame_unref(frame);
             ReleaseAVFrame(&frame);
             break;
         }
@@ -232,6 +237,8 @@ int AudioChannel::reSampleAndObtainPCM() {
                     &out_buffer,dst_nb_samples,
                     (const uint8_t **)frame->data,frame->nb_samples);
         pcm_size = number_samples_per_channel * out_nb_channels * out_bytes_per_sample;
+        av_frame_unref(frame);
+        ReleaseAVFrame(&frame);
         break;
     } //end while
     return pcm_size;

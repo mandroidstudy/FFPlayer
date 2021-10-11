@@ -14,6 +14,7 @@
 
 extern "C"{
     #include "libavformat/avformat.h"
+#include <libavutil/time.h>
 }
 
 class NativeFFPlayer {
@@ -21,6 +22,8 @@ class NativeFFPlayer {
 private:
     std::string data_source;
     bool isPlaying;
+
+    RenderCallback renderCallback = nullptr;
 
     JNICallback *jni_callback         = nullptr;
     VideoChannel *video_channel       = nullptr;

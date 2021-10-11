@@ -35,52 +35,6 @@ static NativeFFPlayer *getNativeFFPlayer(JNIEnv *env, jobject obj) {
     return reinterpret_cast<NativeFFPlayer *>(handle);
 }
 
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_ffplayer_player_FFPlayer_nativeStart(JNIEnv *env, jobject thiz) {
-    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
-    if (player){
-        player->start();
-    }
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_ffplayer_player_FFPlayer_nativeStop(JNIEnv *env, jobject thiz) {
-    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
-    if (player){
-        player->stop();
-    }
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_ffplayer_player_FFPlayer_nativePrepare(JNIEnv *env, jobject thiz) {
-    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
-    if (player){
-        player->prepare();
-    }
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_ffplayer_player_FFPlayer_nativeRelease(JNIEnv *env, jobject thiz) {
-    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
-    if (player){
-        player->release();
-    }
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_ffplayer_player_FFPlayer_nativeSetDataSource(JNIEnv *env, jobject thiz,jstring jsource) {
-    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
-    if (player){
-        string source = jstring2string(env,jsource);
-        player->setDataSource(source);
-    }
-}
-
 void renderCallback(uint8_t * src_data, int width, int height, int src_linesize){
     pthread_mutex_lock(&windowMutex);
     //render raw data to window
@@ -108,11 +62,57 @@ void renderCallback(uint8_t * src_data, int width, int height, int src_linesize)
 }
 
 extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeStart(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->start();
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeStop(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->stop();
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativePrepare(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->setRenderCallback(renderCallback);
+        player->prepare();
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeRelease(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->release();
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeSetDataSource(JNIEnv *env, jobject thiz,jstring jsource) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        string source = jstring2string(env,jsource);
+        player->setDataSource(source);
+    }
+}
+
+extern "C"
 JNIEXPORT jlong JNICALL
 Java_com_example_ffplayer_player_FFPlayer_nativeCreate(JNIEnv *env, jobject thiz) {
     auto * jniCallback = new JNICallback(javaVm,env,thiz);
     auto * nativeFfPlayer = new NativeFFPlayer(jniCallback);
-    nativeFfPlayer->setRenderCallback(renderCallback);
     return reinterpret_cast<jlong>(nativeFfPlayer);
 }
 
