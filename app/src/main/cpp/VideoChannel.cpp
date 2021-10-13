@@ -11,7 +11,7 @@ void * decodeVideoTask(void * arg){
     if (videoChannel){
         videoChannel->doDecodePacket();
     }
-    return 0;
+    return nullptr;
 }
 
 void * playVideoTask(void * arg){
@@ -19,7 +19,7 @@ void * playVideoTask(void * arg){
     if (videoChannel){
         videoChannel->doPlay();
     }
-    return 0;
+    return nullptr;
 }
 
 void VideoChannel::start() {
@@ -39,6 +39,10 @@ VideoChannel::~VideoChannel() {
 void VideoChannel::doDecodePacket() {
     AVPacket * packet = nullptr;
     while (isPlaying){
+        if (frames.size() > MAX_CACHE_SIZE){
+            av_usleep(10 * 1000);
+            continue;
+        }
         int res = packets.frontAndPop(packet);
         if (!isPlaying){
             break;
@@ -46,23 +50,34 @@ void VideoChannel::doDecodePacket() {
         if (res == 0){
             continue;
         }
+        //packet will be empty on read error/EOF
         res= avcodec_send_packet(avCodecContext,packet);
-        av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
-        ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
-        if (res == 0){
+        if (res < 0){
+            break;
+        }
+        av_packet_unref(packet);
+        ReleaseAVPacket(&packet);
+        while (true){
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
             if (res == 0){
                 frames.push(frame);
-            } else if (res == AVERROR(EAGAIN)){
-                continue;
-            } else{
+            }else if (res == AVERROR(EAGAIN)){
+                if (frame){
+                    av_frame_unref(frame);
+                    ReleaseAVFrame(&frame);
+                }
                 break;
+            } else {
+                if (frame){
+                    av_frame_unref(frame);
+                    ReleaseAVFrame(&frame);
+                }
+                goto finish;
             }
-        } else{
-            break;
         }
     }
+    finish:
     isPlaying = false;
     av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
     ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
@@ -86,12 +101,10 @@ void VideoChannel::doPlay() {
             SWS_BILINEAR,
             nullptr, nullptr, nullptr
             );
+    AVFrame *frame = nullptr;
     while (isPlaying) {
-        AVFrame *frame = nullptr;
         int res = frames.frontAndPop(frame);
         if (!isPlaying) {
-            av_frame_unref(frame);
-            ReleaseAVFrame(&frame);
             break;
         }
         if (res == 0) {
@@ -107,6 +120,8 @@ void VideoChannel::doPlay() {
         ReleaseAVFrame(&frame);
     }
     isPlaying = false;
+    av_frame_unref(frame);
+    ReleaseAVFrame(&frame);
     packets.setWorkStatus(false);
     frames.setWorkStatus(false);
     av_free(&dst_data[0]);

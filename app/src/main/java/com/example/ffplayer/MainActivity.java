@@ -44,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
         ffPlayer.setOnErrorListener((code, desc) -> runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                status.setText("出错了 code = "+code+ " desc=" + desc);
+                status.setText("出错了 code = "+code+ ", desc=" + desc);
             }
         }));
         ffPlayer.setOnCompletedListener(new OnCompletedListener() {

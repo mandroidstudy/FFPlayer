@@ -20,8 +20,7 @@ public class FFPlayer implements SurfaceHolder.Callback {
     public static final int ERR_OPEN_INPUT = 1;
     public static final int ERR_FIND_STREAM_INFO = 2;
     public static final int ERR_CODEC_PARAMS_TO_CONTEXT = 3;
-    public static final int ERR_CODEC_OPEN = 4;
-    public static final int ERR_NOT_AUDIO_VIDEO_STREAM = 5;
+    public static final int ERR_NOT_AUDIO_VIDEO_STREAM = 4;
 
     private long nativeHandle;
 

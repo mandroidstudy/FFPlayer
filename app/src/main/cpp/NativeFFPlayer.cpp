@@ -13,7 +13,7 @@ void* prepareTask(void * arg){
     if (player){
         player->doPrepare();
     }
-    return 0;
+    return nullptr;
 }
 
 /**
@@ -27,51 +27,93 @@ void* prepareTask(void * arg){
  */
 void NativeFFPlayer::doPrepare() {
     avFormatContext = avformat_alloc_context();
-    int res = avformat_open_input(&avFormatContext,data_source.c_str(), 0, 0);
+    int res = avformat_open_input(&avFormatContext,data_source.c_str(), nullptr, nullptr);
     if (res){
         if (jni_callback != nullptr){
             jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_OPEN_INPUT,av_err2str(res));
         }
         return;
     }
-    res = avformat_find_stream_info(avFormatContext,0);
+    res = avformat_find_stream_info(avFormatContext, nullptr);
     if (res < 0){
         if (jni_callback != nullptr){
             jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_FIND_STREAM_INFO,av_err2str(res));
         }
         return;
     }
-    int N = avFormatContext->nb_streams;
-    for (int i = 0; i < N; i++){
-        AVStream * avStream = avFormatContext->streams[i];
-        AVCodecParameters * codecParameters = avStream->codecpar;
-        AVCodec * avCodec = avcodec_find_decoder(codecParameters->codec_id);
-        AVCodecContext * avCodecContext = avcodec_alloc_context3(avCodec);
-        res = avcodec_parameters_to_context(avCodecContext,codecParameters);
-        if (res < 0){
-            if (jni_callback){
-                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_PARAMS_TO_CONTEXT,av_err2str(res));
+
+    int video_stream = av_find_best_stream(avFormatContext,AVMediaType::AVMEDIA_TYPE_VIDEO,-1,-1, nullptr,0);
+    if (video_stream >= 0){
+        AVCodecParameters * codecpar = avFormatContext->streams[video_stream]->codecpar;
+        AVCodec * codec = avcodec_find_decoder(codecpar->codec_id);
+        if (!codec) {
+            if (jni_callback != nullptr){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't find decoder");
             }
             return;
         }
-        res = avcodec_open2(avCodecContext,avCodec,0);
-        if (res){
+        AVCodecContext *  avCodecContext = avcodec_alloc_context3(codec);
+        if (!avCodecContext) {
+            if (jni_callback != nullptr){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't allocate decoder context");
+            }
+            return;
+        }
+        res = avcodec_parameters_to_context(avCodecContext,codecpar);
+        if (res < 0){
+            if (jni_callback){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't copy decoder context");
+            }
+            return;
+        }
+        res = avcodec_open2(avCodecContext,codec, nullptr);
+        if (res < 0){
             if (jni_callback){
                 jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,av_err2str(res));
             }
             return;
         }
-        if (codecParameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO){
-            video_channel = new VideoChannel(i, avCodecContext);
-            video_channel->setRenderCallback(renderCallback);
-        } else if (codecParameters->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO){
-            audio_channel = new AudioChannel(i,avCodecContext);
+        video_channel = new VideoChannel(video_stream, avCodecContext);
+        video_channel->setRenderCallback(renderCallback);
+    }
+
+    int audio_stream = av_find_best_stream(avFormatContext,AVMediaType::AVMEDIA_TYPE_AUDIO,-1,-1, nullptr,0);
+    if (audio_stream >= 0){
+        AVCodecParameters * codecpar = avFormatContext->streams[audio_stream]->codecpar;
+        AVCodec * codec = avcodec_find_decoder(codecpar->codec_id);
+        if (!codec) {
+            if (jni_callback != nullptr){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't find decoder");
+            }
+            return;
         }
-    } //for end
+        AVCodecContext *  avCodecContext = avcodec_alloc_context3(codec);
+        if (!avCodecContext) {
+            if (jni_callback != nullptr){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't allocate decoder context");
+            }
+            return;
+        }
+        res = avcodec_parameters_to_context(avCodecContext,codecpar);
+        if (res < 0){
+            if (jni_callback){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,"Can't copy decoder context");
+            }
+            return;
+        }
+        res = avcodec_open2(avCodecContext,codec, nullptr);
+        if (res < 0){
+            if (jni_callback){
+                jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_CODEC_OPEN,av_err2str(res));
+            }
+            return;
+        }
+        audio_channel = new AudioChannel(audio_stream,avCodecContext);
+    }
 
     if (video_channel == nullptr && audio_channel == nullptr){
         if (jni_callback != nullptr){
-            jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_NOT_AUDIO_VIDEO_STREAM,av_err2str(res));
+            jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_NOT_AUDIO_VIDEO_STREAM,"Can't find video stream and audio stream");
         }
         return;
     }
@@ -95,18 +137,14 @@ void* startTask(void * arg){
     if (player){
         player->doStart();
     }
-    return 0;
+    return nullptr;
 }
 
 void NativeFFPlayer::doStart() {
     while (isPlaying){
-        if (video_channel && video_channel->packets.size() > 100) {
-            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
-            continue;
-        }
-
-        if (audio_channel && audio_channel->packets.size() > 100) {
-            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
+        if ((video_channel && video_channel->packets.size() > MAX_SIZE)
+            || (audio_channel && audio_channel->packets.size() > MAX_SIZE)) {
+            av_usleep(10 * 1000); //10毫秒
             continue;
         }
 
@@ -120,14 +158,14 @@ void NativeFFPlayer::doStart() {
             }
         } else if(res == AVERROR_EOF){
             //read packets end
-            if (audio_channel->packets.empty()
-                && audio_channel->frames.empty()
-                   && video_channel->packets.empty()
-                      && video_channel->frames.empty()){
+            if (audio_channel->packets.empty() && audio_channel->frames.empty() &&
+                    video_channel->packets.empty() && video_channel->frames.empty()){
                 if (jni_callback){
                     jni_callback->onCompleted(ThreadType::THREAD_TYPE_CHILD);
                 }
                 break;
+            } else {
+                av_usleep(10 * 1000); //10毫秒
             }
         } else{
             //error
@@ -153,7 +191,7 @@ void NativeFFPlayer::start() {
         video_channel->start();
     }
     pthread_t start_tid;
-    pthread_create(&start_tid,0,startTask,this);
+    pthread_create(&start_tid,nullptr,startTask,this);
 }
 
 void NativeFFPlayer::stop() {
@@ -175,7 +213,7 @@ NativeFFPlayer::~NativeFFPlayer() {
     }
 }
 
-void NativeFFPlayer::setRenderCallback(RenderCallback renderCallback) {
-    this->renderCallback = renderCallback;
+void NativeFFPlayer::setRenderCallback(RenderCallback _renderCallback) {
+    this->renderCallback = _renderCallback;
 }
 

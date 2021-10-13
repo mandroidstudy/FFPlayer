@@ -20,6 +20,7 @@ extern "C"{
 class NativeFFPlayer {
 
 private:
+    const int MAX_SIZE = 100;
     std::string data_source;
     bool isPlaying;
 

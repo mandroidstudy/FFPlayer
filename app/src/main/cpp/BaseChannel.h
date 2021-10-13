@@ -13,6 +13,7 @@ extern "C"{
 
 class BaseChannel{
 public:
+    const int MAX_CACHE_SIZE = 100;
     int stream_index;
     AVCodecContext * avCodecContext;
 
@@ -34,6 +35,7 @@ public:
         av_packet_free(packet);
         packet = nullptr;
     }
+
     static void ReleaseAVFrame(AVFrame** frame){
         av_frame_free(frame);
         frame = nullptr;

@@ -16,7 +16,7 @@ extern "C"{
 
 class AudioChannel : public BaseChannel{
 private:
-    bool isPlaying;
+    bool isPlaying = false;
     // engine
     SLObjectItf engineObject = 0;
     SLEngineItf engineEngine = 0;
@@ -38,8 +38,8 @@ public:
     int out_bytes_per_sample;
     int out_sample_rate;
     int out_buffer_size;
-    u_int8_t *out_buffer = 0;
-    SwrContext *swr_ctx = 0;
+    u_int8_t *out_buffer = nullptr;
+    SwrContext *swr_ctx = nullptr;
 public:
     AudioChannel(int index, AVCodecContext *pContext);
     ~AudioChannel();

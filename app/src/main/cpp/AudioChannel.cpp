@@ -12,17 +12,17 @@ AudioChannel::AudioChannel(int index, AVCodecContext *pContext) :BaseChannel(ind
     out_buffer = static_cast<u_int8_t *>(malloc(out_buffer_size));
 
     //ffmpeg 音频重采样参数设置
-    swr_ctx = swr_alloc_set_opts(0,
+    swr_ctx = swr_alloc_set_opts(nullptr,
                                  //output
                                  AV_CH_LAYOUT_STEREO,AVSampleFormat::AV_SAMPLE_FMT_S16,out_sample_rate,
                                  //input
                                              avCodecContext->channel_layout,avCodecContext->sample_fmt,avCodecContext->sample_rate,
-                                             0,0
+                                             0,nullptr
                                              );
     if (swr_ctx){
         if (swr_init(swr_ctx)){
             swr_free(&swr_ctx);
-            swr_ctx = 0;
+            swr_ctx = nullptr;
         }
     }
 }
@@ -32,7 +32,7 @@ void * decodeAudioTask(void * arg){
     if (audioChannel){
         audioChannel->doDecodePacket();
     }
-    return 0;
+    return nullptr;
 }
 
 void * playAudioTask(void * arg){
@@ -40,7 +40,7 @@ void * playAudioTask(void * arg){
     if (audioChannel){
         audioChannel->doPlay();
     }
-    return 0;
+    return nullptr;
 }
 
 void AudioChannel::start() {
@@ -56,8 +56,8 @@ void AudioChannel::start() {
 void AudioChannel::doDecodePacket() {
     AVPacket * packet = nullptr;
     while (isPlaying){
-        if (isPlaying && frames.size() > 100) {
-            av_usleep(10 * 1000); // 单位 ：microseconds 微妙 10毫秒
+        if (frames.size() > MAX_CACHE_SIZE){
+            av_usleep(10 * 1000);
             continue;
         }
         int res = packets.frontAndPop(packet);
@@ -68,33 +68,42 @@ void AudioChannel::doDecodePacket() {
             continue;
         }
         res= avcodec_send_packet(avCodecContext,packet);
-        av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
-        ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
-        if (res == 0){
+        if (res != 0 ){
+            break;
+        }
+        av_packet_unref(packet);
+        ReleaseAVPacket(&packet);
+        while (true){
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
             if (res == 0){
                 frames.push(frame);
-            } else if (res == AVERROR(EAGAIN)){
-                continue;
-            } else{
+            }else if (res == AVERROR(EAGAIN)){
+                if (frame){
+                    av_frame_unref(frame);
+                    ReleaseAVFrame(&frame);
+                }
                 break;
+            } else {
+                if (frame){
+                    av_frame_unref(frame);
+                    ReleaseAVFrame(&frame);
+                }
+                goto finish;
             }
-        } else{
-            break;
         }
     }
-
-    av_packet_unref(packet); // 减1 = 0 释放成员指向的堆区
-    ReleaseAVPacket(&packet); // 释放AVPacket * 本身的堆区空间
+    finish:
     isPlaying = false;
+    av_packet_unref(packet);
+    ReleaseAVPacket(&packet);
     packets.setWorkStatus(false);
     frames.setWorkStatus(false);
 }
 
 //每次缓存队列的数据播放完就会回调这个函数
 void bufferQueueCallback(SLAndroidSimpleBufferQueueItf caller, void *pContext){
-    AudioChannel* audioChannel = static_cast<AudioChannel *>(pContext);
+    auto* audioChannel = static_cast<AudioChannel *>(pContext);
     int pcm_size = audioChannel->reSampleAndObtainPCM();
     if (pcm_size <= 0) return;
     (*caller)->Enqueue(caller,
@@ -105,7 +114,7 @@ void bufferQueueCallback(SLAndroidSimpleBufferQueueItf caller, void *pContext){
 void AudioChannel::doPlay() {
     SLresult sLresult;
     //1、获取引擎接口
-    sLresult = slCreateEngine(&engineObject,0, 0, 0, 0, 0);
+    sLresult = slCreateEngine(&engineObject,0, nullptr, 0, nullptr, nullptr);
     if (sLresult != SL_RESULT_SUCCESS){
         LOGE("slCreateEngine fail")
         return;
@@ -161,7 +170,7 @@ void AudioChannel::doPlay() {
     SLDataSource dataSource={&loc_bufq,&format_pcm};
     //Data Sink
     SLDataLocator_OutputMix loc_outmix={SL_DATALOCATOR_OUTPUTMIX,outputMixObject};
-    SLDataSink dataSink={&loc_outmix,NULL};
+    SLDataSink dataSink={&loc_outmix,nullptr};
 
 
     //create audio player:
@@ -211,18 +220,16 @@ void AudioChannel::doPlay() {
 AudioChannel::~AudioChannel() {
     if (swr_ctx){
         swr_free(&swr_ctx);
-        swr_ctx = 0;
+        swr_ctx = nullptr;
     }
 }
 
 int AudioChannel::reSampleAndObtainPCM() {
     int pcm_size = 0;
+    AVFrame *frame = nullptr;
     while (isPlaying && swr_ctx) {
-        AVFrame *frame = nullptr;
         int res = frames.frontAndPop(frame);
         if (!isPlaying) {
-            av_frame_unref(frame);
-            ReleaseAVFrame(&frame);
             break;
         }
         if (res == 0) {
@@ -241,5 +248,7 @@ int AudioChannel::reSampleAndObtainPCM() {
         ReleaseAVFrame(&frame);
         break;
     } //end while
+    av_frame_unref(frame);
+    ReleaseAVFrame(&frame);
     return pcm_size;
 }
