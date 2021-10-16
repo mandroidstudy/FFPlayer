@@ -20,6 +20,8 @@ public:
     SafeQueue<AVPacket*> packets;
     SafeQueue<AVFrame*> frames;
 
+    AVRational timeBase;
+
 public:
     BaseChannel(int index, AVCodecContext *codecContext):stream_index(index),avCodecContext(codecContext){
         packets.setReleaseCallback(ReleaseAVPacket);
@@ -29,6 +31,11 @@ public:
     virtual ~BaseChannel() {
         packets.clear();
         frames.clear();
+    }
+
+public:
+    void setTimeBase(AVRational& avRational){
+        timeBase = avRational;
     }
 
     static void ReleaseAVPacket(AVPacket** packet){

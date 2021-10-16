@@ -73,7 +73,12 @@ void NativeFFPlayer::doPrepare() {
             }
             return;
         }
+        AVStream * stream = avFormatContext->streams[video_stream];
         video_channel = new VideoChannel(video_stream, avCodecContext);
+        video_channel->setTimeBase(stream->time_base);
+        AVRational frame_rational = stream->avg_frame_rate;
+        int fps = av_q2d(frame_rational);
+        video_channel->setFps(fps);
         video_channel->setRenderCallback(renderCallback);
     }
 
@@ -109,6 +114,7 @@ void NativeFFPlayer::doPrepare() {
             return;
         }
         audio_channel = new AudioChannel(audio_stream,avCodecContext);
+        audio_channel->setTimeBase(avFormatContext->streams[audio_stream]->time_base);
     }
 
     if (video_channel == nullptr && audio_channel == nullptr){
@@ -116,6 +122,9 @@ void NativeFFPlayer::doPrepare() {
             jni_callback->onError(ThreadType::THREAD_TYPE_CHILD,FFMPEG_ERR_NOT_AUDIO_VIDEO_STREAM,"Can't find video stream and audio stream");
         }
         return;
+    }
+    if (video_channel!= nullptr){
+        video_channel -> setAudioChannel(audio_channel);
     }
     if (jni_callback){
         jni_callback->onPrepared(ThreadType::THREAD_TYPE_CHILD);

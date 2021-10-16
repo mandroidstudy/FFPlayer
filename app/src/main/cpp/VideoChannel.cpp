@@ -4,7 +4,10 @@
 
 #include "VideoChannel.h"
 
-VideoChannel::VideoChannel(int index, AVCodecContext *pContext):BaseChannel(index,pContext) {}
+VideoChannel::VideoChannel(int index, AVCodecContext *pContext):BaseChannel(index,pContext) {
+    packets.setSyncCallback(DropAvPacket);
+    frames.setSyncCallback(DropAvFrame);
+}
 
 void * decodeVideoTask(void * arg){
     auto *videoChannel = static_cast<VideoChannel *>(arg);
@@ -58,6 +61,9 @@ void VideoChannel::doDecodePacket() {
         av_packet_unref(packet);
         ReleaseAVPacket(&packet);
         while (true){
+            if (!isPlaying){
+                goto finish;
+            }
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
             if (res == 0){
@@ -110,8 +116,35 @@ void VideoChannel::doPlay() {
         if (res == 0) {
             continue;
         }
+
+        //解码耗时
+        double extra_delay = frame->repeat_pict / (2*fps);
+        double fps_delay = 1.0 / fps;
+        double real_delay = extra_delay + fps_delay;
+        double video_time = frame->pts * av_q2d(timeBase);
+        double audio_clock = audio_channel->audio_clock;
+        double diff_time = video_time - audio_clock;
+        if (diff_time > 0){
+            //video faster
+            //本来每一帧之间就存在时间间隔，需要休眠real_delay，比如fps = 60，一秒应该播放60帧 每一帧就是1/60s。如果不延迟，有的机器解码，渲染速度很快，可能会大于60帧
+            //现在又由于视频比音频快diff_time，那就再多休眠diff_time时间
+            av_usleep((diff_time + real_delay) * 1000 * 1000);
+        } else{
+            //audio faster
+            if (fabs(diff_time) > 1){
+
+            } else if (fabs(diff_time) >= 0.05){
+                //丢帧
+                av_frame_unref(frame);
+                ReleaseAVFrame(&frame);
+                frames.runSyncCallback();
+                continue;
+            }
+        }
+
         sws_scale(swsContext, frame->data, frame->linesize, 0, avCodecContext->height,
                   dst_data,dst_linesizes);
+
         //success get dst_data, render it to windowav_image_fill_arrays
         if (_renderCallback){
             _renderCallback(dst_data[0],avCodecContext->width,avCodecContext->height,dst_linesizes[0]);
@@ -133,4 +166,12 @@ void VideoChannel::setRenderCallback(RenderCallback renderCallback) {
 }
 
 void VideoChannel::stop() {
+}
+
+void VideoChannel::setFps(int _fps) {
+    this->fps = _fps;
+}
+
+void VideoChannel::setAudioChannel(AudioChannel *audio_channel) {
+    this->audio_channel = audio_channel;
 }

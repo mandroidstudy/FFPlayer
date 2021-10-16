@@ -40,6 +40,7 @@ public:
     int out_buffer_size;
     u_int8_t *out_buffer = nullptr;
     SwrContext *swr_ctx = nullptr;
+    double audio_clock = 0;
 public:
     AudioChannel(int index, AVCodecContext *pContext);
     ~AudioChannel();

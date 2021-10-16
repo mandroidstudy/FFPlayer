@@ -32,7 +32,8 @@ public class MainActivity extends AppCompatActivity {
         binding.setStatus(status);
         ffPlayer = new FFPlayer();
         String parh = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).getAbsoluteFile().getAbsolutePath();
-        parh = parh + "/Camera/VID20211006053718.mp4";
+        parh = parh + "/Camera/ffplay222.mp4";
+//        parh = parh + "/Camera/VID20211006053718.mp4";
         Log.d("maoweiyi","path = "+ parh);
         ffPlayer.setDataSource(parh);
         ffPlayer.setSurfaceHolder(binding.surfaceView.getHolder());

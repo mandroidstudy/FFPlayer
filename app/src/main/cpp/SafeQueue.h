@@ -12,12 +12,14 @@ template<typename T>
 class SafeQueue {
 private:
     typedef void (*ReleaseCallback)(T* t);
+    typedef void (*SyncCallback)(std::queue<T> &queue);
 private:
     std::queue<T> values;
     pthread_mutex_t  mutex{};
     pthread_cond_t cond{};
     bool isWorking = false;
     ReleaseCallback releaseCallback;
+    SyncCallback syncCallback;
 public:
     SafeQueue(){
         pthread_mutex_init(&mutex, nullptr);
@@ -26,6 +28,18 @@ public:
 
     void setReleaseCallback(ReleaseCallback callback){
         this->releaseCallback = callback;
+    }
+
+    void setSyncCallback(SyncCallback callback){
+        this->syncCallback = callback;
+    }
+
+    void runSyncCallback(){
+        pthread_mutex_lock(&mutex);
+        if (syncCallback){
+            syncCallback(values);
+        }
+        pthread_mutex_unlock(&mutex);
     }
 
     void push(T t) {

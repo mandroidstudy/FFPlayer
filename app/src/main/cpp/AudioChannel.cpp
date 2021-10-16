@@ -74,6 +74,9 @@ void AudioChannel::doDecodePacket() {
         av_packet_unref(packet);
         ReleaseAVPacket(&packet);
         while (true){
+            if (!isPlaying){
+                goto finish;
+            }
             AVFrame * frame = av_frame_alloc();
             res = avcodec_receive_frame(avCodecContext,frame);
             if (res == 0){
@@ -244,8 +247,7 @@ int AudioChannel::reSampleAndObtainPCM() {
                     &out_buffer,dst_nb_samples,
                     (const uint8_t **)frame->data,frame->nb_samples);
         pcm_size = number_samples_per_channel * out_nb_channels * out_bytes_per_sample;
-        av_frame_unref(frame);
-        ReleaseAVFrame(&frame);
+        audio_clock = frame->pts * av_q2d(timeBase);
         break;
     } //end while
     av_frame_unref(frame);
