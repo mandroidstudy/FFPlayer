@@ -10,6 +10,7 @@ JNICallback::JNICallback(JavaVM *javaVm, JNIEnv *env, jobject jobj) {
     this->jobj = env->NewGlobalRef(jobj);
     jclass jclz = env->GetObjectClass(jobj);
     onPreparedMid = env->GetMethodID(jclz,"onPrepared","()V");
+    onProgressMid = env->GetMethodID(jclz,"onProgress","(I)V");;
     onCompletedMid = env->GetMethodID(jclz,"onCompleted","()V");
     onErrorMid = env->GetMethodID(jclz,"onError","(ILjava/lang/String;)V");
 }
@@ -21,6 +22,17 @@ void JNICallback::onPrepared(ThreadType threadType) {
         JNIEnv * env;
         javaVm->AttachCurrentThread(&env,0);
         env->CallVoidMethod(jobj,onPreparedMid);
+        javaVm->DetachCurrentThread();
+    }
+}
+
+void JNICallback::onProgress(ThreadType threadType,int progress) {
+    if (threadType ==ThreadType::THREAD_TYPE_MAIN){
+        mainEnv->CallVoidMethod(jobj,onProgressMid);
+    } else{
+        JNIEnv * env;
+        javaVm->AttachCurrentThread(&env,0);
+        env->CallVoidMethod(jobj,onProgressMid,progress);
         javaVm->DetachCurrentThread();
     }
 }

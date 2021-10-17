@@ -9,4 +9,5 @@ public class ListenerInfo {
     public OnPreparedListener mOnPreparedListener;
     public OnErrorListener mOnErrorListener;
     public OnCompletedListener mOnCompletedListener;
+    public OnProgressListener mOnProgressListener;
 }

@@ -9,6 +9,7 @@ import com.example.ffplayer.listener.ListenerInfo;
 import com.example.ffplayer.listener.OnCompletedListener;
 import com.example.ffplayer.listener.OnErrorListener;
 import com.example.ffplayer.listener.OnPreparedListener;
+import com.example.ffplayer.listener.OnProgressListener;
 
 /**
  * @author maoweiyi
@@ -64,6 +65,29 @@ public class FFPlayer implements SurfaceHolder.Callback {
         mSurfaceHolder.addCallback(this);
     }
 
+    /**
+     * @return seconds
+     */
+    public int getDuration() {
+        return nativeGetDuration();
+    }
+
+    public void seek(int progress) {
+        nativeSeek(progress);
+    }
+
+    public void pause() {
+        nativePause();
+    }
+
+    public boolean isPause() {
+        return nativeIsPause();
+    }
+
+    public void resume() {
+        nativeResume();
+    }
+
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
 
@@ -95,6 +119,10 @@ public class FFPlayer implements SurfaceHolder.Callback {
         getListenerInfo().mOnCompletedListener = onCompletedListener;
     }
 
+    public void setOnProgressListener(OnProgressListener onProgressListener) {
+        getListenerInfo().mOnProgressListener = onProgressListener;
+    }
+
     public void setOnErrorListener(OnErrorListener onErrorListener) {
         getListenerInfo().mOnErrorListener = onErrorListener;
     }
@@ -110,6 +138,12 @@ public class FFPlayer implements SurfaceHolder.Callback {
     private void onCompleted(){
         if (getListenerInfo().mOnCompletedListener != null){
             getListenerInfo().mOnCompletedListener.onCompleted();
+        }
+    }
+
+    private void onProgress(int progress){
+        if (getListenerInfo().mOnProgressListener != null){
+            getListenerInfo().mOnProgressListener.OnProgress(progress);
         }
     }
 
@@ -134,4 +168,14 @@ public class FFPlayer implements SurfaceHolder.Callback {
     private native void nativeRelease();
 
     private native void setNativeSurface(Surface surface);
+
+    private native int nativeGetDuration();
+
+    private native void nativeSeek(int progress);
+
+    private native void nativePause();
+
+    private native void nativeResume();
+
+    private native boolean nativeIsPause();
 }

@@ -23,6 +23,7 @@ private:
     const int MAX_SIZE = 100;
     std::string data_source;
     bool isPlaying;
+    pthread_mutex_t seek_mutex_t;
 
     RenderCallback renderCallback = nullptr;
 
@@ -30,7 +31,11 @@ private:
     VideoChannel *video_channel       = nullptr;
     AudioChannel *audio_channel       = nullptr;
     AVFormatContext *avFormatContext  = nullptr;
+    int duration;
 
+    pthread_t prepare_tid;
+    pthread_t start_tid;
+    pthread_t stop_tid;
 public:
 
     NativeFFPlayer(JNICallback *jniCallback);
@@ -45,6 +50,18 @@ public:
     ~NativeFFPlayer();
 
     void setRenderCallback(RenderCallback renderCallback);
+
+    int getDuration() const;
+
+    void seek(jint progress);
+
+    void doStop();
+
+    void pause();
+
+    bool isPause();
+
+    void resume();
 };
 
 

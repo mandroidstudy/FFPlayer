@@ -15,11 +15,13 @@ private:
     jobject jobj;
 
     jmethodID onPreparedMid;
+    jmethodID onProgressMid;
     jmethodID onCompletedMid;
     jmethodID onErrorMid;
 public:
     JNICallback(JavaVM *javaVm, JNIEnv *env, jobject jobj);
     void onPrepared(ThreadType threadType);
+    void onProgress(ThreadType threadType,int progress);
     void onCompleted(ThreadType threadType);
     void onError(ThreadType threadType,jint code,const char * desc);
     ~JNICallback();

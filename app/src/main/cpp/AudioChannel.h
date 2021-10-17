@@ -7,6 +7,7 @@
 
 
 #include "BaseChannel.h"
+#include "JNICallback.h"
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 //重采样
@@ -41,6 +42,8 @@ public:
     u_int8_t *out_buffer = nullptr;
     SwrContext *swr_ctx = nullptr;
     double audio_clock = 0;
+    double last_audio_clock = 0;
+    JNICallback *jniCallback = nullptr;
 public:
     AudioChannel(int index, AVCodecContext *pContext);
     ~AudioChannel();
@@ -52,6 +55,10 @@ public:
     void doPlay();
 
     int reSampleAndObtainPCM();
+
+    void addJniCallback(JNICallback *jniCallback);
+
+    void stop();
 };
 
 

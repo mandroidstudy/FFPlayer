@@ -93,6 +93,17 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_ffplayer_player_FFPlayer_nativeRelease(JNIEnv *env, jobject thiz) {
     NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    pthread_mutex_lock(&windowMutex);
+    if (nativeWindow){
+        ANativeWindow_release(nativeWindow);
+        delete nativeWindow;
+        nativeWindow = nullptr;
+    }
+    pthread_mutex_unlock(&windowMutex);
+    if (javaVm){
+        delete javaVm;
+        javaVm = nullptr;
+    }
     if (player){
         player->release();
     }
@@ -128,6 +139,54 @@ Java_com_example_ffplayer_player_FFPlayer_setNativeSurface(JNIEnv *env, jobject 
         }
         nativeWindow = ANativeWindow_fromSurface(env,surface);
         pthread_mutex_unlock(&windowMutex);
+    }
+}
+
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeGetDuration(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+       return player->getDuration();
+    }
+    return -1;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeSeek(JNIEnv *env, jobject thiz, jint progress) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->seek(progress);
+    }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativePause(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->pause();
+    }
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeIsPause(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        return player->isPause();
+    }
+    return false;
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_ffplayer_player_FFPlayer_nativeResume(JNIEnv *env, jobject thiz) {
+    NativeFFPlayer * player = getNativeFFPlayer(env,thiz);
+    if (player){
+        player->resume();
     }
 }
 

@@ -13,7 +13,7 @@ extern "C"{
 
 class BaseChannel{
 public:
-    const int MAX_CACHE_SIZE = 100;
+    const int MAX_CACHE_SIZE = 50;
     int stream_index;
     AVCodecContext * avCodecContext;
 
@@ -36,6 +36,11 @@ public:
 public:
     void setTimeBase(AVRational& avRational){
         timeBase = avRational;
+    }
+
+    void clearAllAVPacketAndAVFrame(){
+        packets.clear();
+        frames.clear();
     }
 
     static void ReleaseAVPacket(AVPacket** packet){

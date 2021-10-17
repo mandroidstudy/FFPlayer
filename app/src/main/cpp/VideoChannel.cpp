@@ -128,12 +128,16 @@ void VideoChannel::doPlay() {
             //video faster
             //本来每一帧之间就存在时间间隔，需要休眠real_delay，比如fps = 60，一秒应该播放60帧 每一帧就是1/60s。如果不延迟，有的机器解码，渲染速度很快，可能会大于60帧
             //现在又由于视频比音频快diff_time，那就再多休眠diff_time时间
-            av_usleep((diff_time + real_delay) * 1000 * 1000);
+            if (diff_time > 1){
+
+            }else if (diff_time > 0.03){
+                av_usleep((diff_time + real_delay) * 1000 * 1000);
+            }
         } else{
             //audio faster
-            if (fabs(diff_time) > 1){
+            if (diff_time > 1){
 
-            } else if (fabs(diff_time) >= 0.05){
+            }else if (fabs(diff_time) >= 0.05){
                 //丢帧
                 av_frame_unref(frame);
                 ReleaseAVFrame(&frame);
@@ -166,6 +170,7 @@ void VideoChannel::setRenderCallback(RenderCallback renderCallback) {
 }
 
 void VideoChannel::stop() {
+
 }
 
 void VideoChannel::setFps(int _fps) {

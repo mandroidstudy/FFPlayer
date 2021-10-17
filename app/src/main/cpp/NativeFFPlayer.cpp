@@ -5,6 +5,7 @@
 #include "NativeFFPlayer.h"
 
 NativeFFPlayer::NativeFFPlayer(JNICallback *jniCallback) {
+    pthread_mutex_init(&seek_mutex_t, nullptr);
     jni_callback = jniCallback;
 }
 
@@ -123,7 +124,11 @@ void NativeFFPlayer::doPrepare() {
         }
         return;
     }
-    if (video_channel!= nullptr){
+    duration = avFormatContext->duration / AV_TIME_BASE;
+    if (audio_channel && duration>0){
+        audio_channel->addJniCallback(jni_callback);
+    }
+    if (video_channel){
         video_channel -> setAudioChannel(audio_channel);
     }
     if (jni_callback){
@@ -132,8 +137,7 @@ void NativeFFPlayer::doPrepare() {
 }
 
 void NativeFFPlayer::prepare() {
-    pthread_t t_id;
-    pthread_create(&t_id,nullptr,prepareTask,this);
+    pthread_create(&prepare_tid,nullptr,prepareTask,this);
 }
 
 void NativeFFPlayer::setDataSource(std::string& source) {
@@ -181,14 +185,6 @@ void NativeFFPlayer::doStart() {
             break;
         }
     } // end whild
-    isPlaying = false;
-    //stop
-    if (audio_channel){
-        video_channel->stop();
-    }
-    if (video_channel){
-        video_channel->stop();
-    }
 }
 
 void NativeFFPlayer::start() {
@@ -199,12 +195,44 @@ void NativeFFPlayer::start() {
     if (video_channel){
         video_channel->start();
     }
-    pthread_t start_tid;
     pthread_create(&start_tid,nullptr,startTask,this);
 }
 
-void NativeFFPlayer::stop() {
+void* stopTask(void * arg){
+    auto * player = static_cast<NativeFFPlayer *>(arg);
+    if (player){
+        player->doStop();
+    }
+    return nullptr;
+}
 
+void NativeFFPlayer::stop() {
+    isPlaying = false;
+    jni_callback = nullptr;
+    if (audio_channel){
+        audio_channel->jniCallback = nullptr;
+    }
+    pthread_create(&stop_tid, nullptr,stopTask,this);
+}
+
+void NativeFFPlayer::doStop() {
+    pthread_join(prepare_tid, nullptr);
+    pthread_join(start_tid, nullptr);
+    if (audio_channel){
+        audio_channel->stop();
+        delete audio_channel;
+        audio_channel = nullptr;
+    }
+    if (video_channel){
+        video_channel->stop();
+        delete video_channel;
+        video_channel = nullptr;
+    }
+    if (avFormatContext){
+        avformat_close_input(&avFormatContext);
+        avformat_free_context(avFormatContext);
+        avFormatContext = nullptr;
+    }
 }
 
 void NativeFFPlayer::release() {
@@ -212,6 +240,7 @@ void NativeFFPlayer::release() {
 }
 
 NativeFFPlayer::~NativeFFPlayer() {
+    pthread_mutex_destroy(&seek_mutex_t);
     if (video_channel != nullptr){
         delete video_channel;
         video_channel = nullptr;
@@ -224,5 +253,74 @@ NativeFFPlayer::~NativeFFPlayer() {
 
 void NativeFFPlayer::setRenderCallback(RenderCallback _renderCallback) {
     this->renderCallback = _renderCallback;
+}
+
+int NativeFFPlayer::getDuration() const {
+    return duration;
+}
+
+void NativeFFPlayer::seek(int progress) {
+    if (!isPlaying) return;
+    if (progress < 0 || progress > duration) return;
+    if (!avFormatContext) return;
+    if (!video_channel && !audio_channel) return;
+    pthread_mutex_lock(&seek_mutex_t);
+    int res = av_seek_frame(avFormatContext,-1,progress * AV_TIME_BASE,AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_FRAME);
+    if (res >= 0){
+        if (video_channel){
+            video_channel->packets.setWorkStatus(false);
+            video_channel->frames.setWorkStatus(false);
+        }
+        if (audio_channel){
+            audio_channel->packets.setWorkStatus(false);
+            audio_channel->frames.setWorkStatus(false);
+        }
+        if (video_channel){
+            video_channel->clearAllAVPacketAndAVFrame();
+        }
+        if (audio_channel){
+            audio_channel->clearAllAVPacketAndAVFrame();
+        }
+        if (video_channel){
+            video_channel->packets.setWorkStatus(true);
+            video_channel->frames.setWorkStatus(true);
+        }
+        if (audio_channel){
+            audio_channel->packets.setWorkStatus(true);
+            audio_channel->frames.setWorkStatus(true);
+        }
+    }
+    pthread_mutex_unlock(&seek_mutex_t);
+}
+
+void NativeFFPlayer::pause() {
+    if (audio_channel){
+        audio_channel->frames.setWorkStatus(false);
+        audio_channel->packets.setWorkStatus(false);
+    }
+    if (video_channel){
+        video_channel->frames.setWorkStatus(false);
+        video_channel->packets.setWorkStatus(false);
+    }
+}
+
+bool NativeFFPlayer::isPause() {
+    return isPlaying
+            && !audio_channel->frames.isWorking
+            && !video_channel->frames.isWorking;
+
+}
+
+void NativeFFPlayer::resume() {
+    if (!isPlaying) return;
+    if (audio_channel){
+        LOGD("resume")
+        audio_channel->frames.setWorkStatus(true);
+        audio_channel->packets.setWorkStatus(true);
+    }
+    if (video_channel){
+        video_channel->frames.setWorkStatus(true);
+        video_channel->packets.setWorkStatus(true);
+    }
 }
 

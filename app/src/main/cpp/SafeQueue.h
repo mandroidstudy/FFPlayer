@@ -17,10 +17,10 @@ private:
     std::queue<T> values;
     pthread_mutex_t  mutex{};
     pthread_cond_t cond{};
-    bool isWorking = false;
     ReleaseCallback releaseCallback;
     SyncCallback syncCallback;
 public:
+    bool isWorking = false;
     SafeQueue(){
         pthread_mutex_init(&mutex, nullptr);
         pthread_cond_init(&cond, nullptr);

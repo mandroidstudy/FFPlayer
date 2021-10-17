@@ -248,9 +248,21 @@ int AudioChannel::reSampleAndObtainPCM() {
                     (const uint8_t **)frame->data,frame->nb_samples);
         pcm_size = number_samples_per_channel * out_nb_channels * out_bytes_per_sample;
         audio_clock = frame->pts * av_q2d(timeBase);
+        if (jniCallback && fabs(audio_clock - last_audio_clock) >= 0.5){
+            jniCallback->onProgress(THREAD_TYPE_CHILD,audio_clock);
+            last_audio_clock = audio_clock;
+        }
         break;
     } //end while
     av_frame_unref(frame);
     ReleaseAVFrame(&frame);
     return pcm_size;
+}
+
+void AudioChannel::addJniCallback(JNICallback *jniCallback) {
+    this->jniCallback = jniCallback;
+}
+
+void AudioChannel::stop() {
+    jniCallback = nullptr;
 }
